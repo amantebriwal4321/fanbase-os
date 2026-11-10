@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --color-paper: #f3eadc;
+  --color-card: #fffaf2;
+  --color-ink: #1c1916;
+  --color-muted: #4a453e;
+  --color-line: #ddcfb8;
+  --color-pine: #145c45;
+  --color-clay: #b64018;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+h1,
+h2,
+.font-display {
+  font-family: var(--font-display), Georgia, serif;
+}
+
+::selection {
+  background: #d7efe4;
+}
+
+:focus-visible {
+  outline: 2px solid #145c45;
+  outline-offset: 3px;
+}
+
+input,
+textarea,
+button {
+  font: inherit;
+}
