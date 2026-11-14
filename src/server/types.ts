@@ -1,118 +1,63 @@
-export type Stage = "open" | "in_progress" | "shipped";
+export type Kind = "pitch" | "message";
 
-export type User = {
+export type ItemStatus = "open" | "accepted" | "passed";
+
+export type ClassifySource = "rules" | "model";
+
+export type Fan = {
   id: string;
   name: string;
-  email: string;
-  handle: string;
-  bio: string;
+  note: string;
   hue: number;
-  createdAt: string;
 };
 
 export type Community = {
   id: string;
-  slug: string;
   name: string;
-  interest: string;
-  description: string;
-  creatorId: string;
-  createdAt: string;
+  line: string;
 };
 
-export type Member = {
-  communityId: string;
-  userId: string;
-  joinedAt: string;
-};
-
-export type Idea = {
+export type Viewer = {
   id: string;
+  name: string;
+};
+
+export type DeltaItem = {
+  id: string;
+  kind: Kind;
   communityId: string;
-  authorId: string;
+  fanId: string;
   title: string;
   body: string;
-  pinned: boolean;
-  stage: Stage;
-  qualityScore: number;
-  moderationNote: string;
-  moderationSource: "llm" | "fallback";
-  clusterId: string | null;
   createdAt: string;
-};
-
-export type Vote = {
-  ideaId: string;
-  userId: string;
-};
-
-export type Comment = {
-  id: string;
-  ideaId: string;
-  authorId: string;
-  body: string;
-  createdAt: string;
-};
-
-export type Collaboration = {
-  id: string;
-  ideaId: string;
-  userId: string;
-  note: string;
-  createdAt: string;
-};
-
-export type Cluster = {
-  id: string;
-  communityId: string;
-  label: string;
+  topic: string;
   summary: string;
-  updatedAt: string;
+  classifySource: ClassifySource;
 };
 
-export type Summary = {
-  id: string;
-  communityId: string;
-  day: string;
-  headline: string;
-  body: string;
-  source: "llm" | "fallback";
-  topIdeaIds: string[];
-  createdAt: string;
+export type Decision = {
+  itemId: string;
+  action: "accepted" | "passed";
+  cta: string;
+  postedAt: string;
 };
 
-export type MagicToken = {
-  token: string;
-  email: string;
-  expiresAt: string;
-  used: boolean;
-};
-
-export type StoreData = {
-  seedVersion: number;
-  users: User[];
-  communities: Community[];
-  members: Member[];
-  ideas: Idea[];
-  votes: Vote[];
-  comments: Comment[];
-  collaborations: Collaboration[];
-  clusters: Cluster[];
-  summaries: Summary[];
-  magicTokens: MagicToken[];
-};
-
-export type PublicUser = Pick<User, "id" | "name" | "email" | "handle" | "bio" | "hue">;
-
-export type ClusterDraft = {
-  label: string;
+export type ReadOverride = {
+  itemId: string;
+  topic: string;
   summary: string;
-  ideaIds: string[];
+  classifySource: ClassifySource;
 };
 
-export type Moderation = {
-  ok: boolean;
-  reason: string;
-  qualityScore: number;
-  source: "llm" | "fallback";
+export type Join = {
+  fanId: string;
+  communityId: string;
+};
+
+export type Delta = {
+  fans: Fan[];
+  joins: Join[];
+  items: DeltaItem[];
+  decisions: Decision[];
+  reads: ReadOverride[];
 };

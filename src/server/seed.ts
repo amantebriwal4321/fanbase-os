@@ -1,387 +1,222 @@
-import { assignClusters } from "./assign";
-import { todayKey } from "@/lib/format";
-import type { Comment, Collaboration, Community, Idea, Member, StoreData, User, Vote } from "./types";
+import { hoursAgo } from "./text";
+import type { Community, Fan, Kind } from "./types";
 
-export const SEED_VERSION = 1;
+export const CREATOR = {
+  name: "Rhea Kapoor",
+  handle: "@sundaytable",
+  line: "I film the meals people actually cook.",
+  place: "Kochi",
+  audience: "180k on the channel",
+  film: "Latest film: one dosa order on Princess Street, Thursday night.",
+  letter: "Sunday letter: one table, one recipe, no ads.",
+};
 
-export const FIELD = {
-  slug: "field-notes",
-  communityId: "comm_field",
-  lena: "user_lena",
-  jordan: "user_jordan",
-  sam: "user_sam",
-  priya: "user_priya",
-  mateo: "user_mateo",
-  june: "user_june",
-  amina: "user_amina",
-  freight: "idea_freight",
-  river: "idea_river",
-  lit: "idea_lit",
-  notebook: "idea_notebook",
-  mic: "idea_mic",
-  zine: "idea_zine",
-  bakery: "idea_bakery",
-  ferry: "idea_ferry",
-  garden: "idea_garden",
-  saturday: "idea_saturday",
-  postcard: "idea_postcard",
-  map: "idea_map",
-} as const;
+export const DEMO_PITCH = {
+  title: "Map the Fort Kochi stalls before close",
+  body: "Walk the Fort Kochi night stalls this Saturday and mark which ones still serve after midnight. I can sketch the map if you film two stops.",
+};
 
-const KEPT = "Kept by house rules. It names a concrete plan and does not copy an open idea.";
+export const COMMUNITIES: Community[] = [
+  {
+    id: "night-market",
+    name: "Night Market Club",
+    line: "Late stalls, maps, and who is worth filming.",
+  },
+  {
+    id: "test-kitchen",
+    name: "Test Kitchen",
+    line: "Recipes to try on the next Sunday Table film.",
+  },
+  {
+    id: "guest-spots",
+    name: "Guest spots",
+    line: "Shops and boats that want a scene.",
+  },
+];
 
-function ago(days: number, hours = 0): string {
-  return new Date(Date.now() - (days * 24 + hours) * 3600 * 1000).toISOString();
+export const FANS: Fan[] = [
+  { id: "f-kabir", name: "Kabir Menon", note: "Maps night markets in Kochi", hue: 18 },
+  { id: "f-priya", name: "Priya Shah", note: "Draws simple maps", hue: 152 },
+  { id: "f-jonah", name: "Jonah Reed", note: "Films on a phone", hue: 200 },
+  { id: "f-nina", name: "Nina Kapadia", note: "Watches every film", hue: 340 },
+  { id: "f-meera", name: "Meera Iyer", note: "Tests Sunday recipes", hue: 28 },
+  { id: "f-hassan", name: "Hassan Ali", note: "Keeps a pantry for the show", hue: 262 },
+  { id: "f-lila", name: "Lila Costa", note: "Bakes the first tray", hue: 122 },
+  { id: "f-sam", name: "Sam Ortega", note: "Cooks after work", hue: 42 },
+  { id: "f-arun", name: "Arun Desai", note: "Runs a spice shop in Mattancherry", hue: 12 },
+  { id: "f-dev", name: "Dev Krishnan", note: "Runs a boat kitchen", hue: 210 },
+  { id: "f-rio", name: "Rio Alvarez", note: "Sends promotion notes", hue: 4 },
+];
+
+export const JOINS: { fanId: string; communityId: string }[] = [
+  { fanId: "f-kabir", communityId: "night-market" },
+  { fanId: "f-priya", communityId: "night-market" },
+  { fanId: "f-jonah", communityId: "night-market" },
+  { fanId: "f-nina", communityId: "night-market" },
+  { fanId: "f-meera", communityId: "test-kitchen" },
+  { fanId: "f-hassan", communityId: "test-kitchen" },
+  { fanId: "f-lila", communityId: "test-kitchen" },
+  { fanId: "f-sam", communityId: "test-kitchen" },
+  { fanId: "f-arun", communityId: "guest-spots" },
+  { fanId: "f-dev", communityId: "guest-spots" },
+];
+
+type SeedSpec = {
+  id: string;
+  kind: Kind;
+  communityId: string;
+  fanId: string;
+  title: string;
+  body: string;
+  hoursAgo: number;
+  status: "open" | "accepted";
+  cta?: string;
+  ctaHoursAgo?: number;
+};
+
+const SPECS: SeedSpec[] = [
+  {
+    id: "p-dosa",
+    kind: "pitch",
+    communityId: "night-market",
+    fanId: "f-kabir",
+    title: "Film the 11pm dosa cart on Princess Street",
+    body: "Can you film the dosa cart on Princess Street this Thursday at 11pm? The cook will talk if you stay for one order. I can hold the light.",
+    hoursAgo: 20,
+    status: "open",
+  },
+  {
+    id: "p-map",
+    kind: "pitch",
+    communityId: "night-market",
+    fanId: "f-priya",
+    title: "A one page map for the night stalls",
+    body: "Print a one page map of the Fort Kochi stalls before the next night shoot. I can sketch it from last week's walk if you mark the two you will film.",
+    hoursAgo: 30,
+    status: "open",
+  },
+  {
+    id: "m-audio",
+    kind: "message",
+    communityId: "night-market",
+    fanId: "f-jonah",
+    title: "Quieter audio behind the cart",
+    body: "The side street behind the dosa cart is quieter if you record there. The same cook steps out around 11pm.",
+    hoursAgo: 18,
+    status: "open",
+  },
+  {
+    id: "p-curry",
+    kind: "pitch",
+    communityId: "test-kitchen",
+    fanId: "f-meera",
+    title: "Time the coconut fish curry",
+    body: "Test the coconut fish curry at 20 minutes on Sunday Table. I cooked it twice and the fish stays soft. Can you try it on the next film?",
+    hoursAgo: 26,
+    status: "open",
+  },
+  {
+    id: "p-pantry",
+    kind: "pitch",
+    communityId: "test-kitchen",
+    fanId: "f-hassan",
+    title: "A pantry card for the curry",
+    body: "Print a pantry card for the coconut fish curry with the 20 minute clock on it. I can bring the coconut and the fish on Sunday.",
+    hoursAgo: 36,
+    status: "open",
+  },
+  {
+    id: "m-bakery",
+    kind: "message",
+    communityId: "test-kitchen",
+    fanId: "f-lila",
+    title: "The first tray at 4am",
+    body: "The first tray comes out of the bakery at 4am. The buns smell like butter and the street is still empty.",
+    hoursAgo: 40,
+    status: "open",
+  },
+  {
+    id: "p-spice",
+    kind: "pitch",
+    communityId: "guest-spots",
+    fanId: "f-arun",
+    title: "Morning light at the spice shop",
+    body: "Open the spice shop at 7am and film the first customers. I can clear the front counter for you on Saturday.",
+    hoursAgo: 15,
+    status: "open",
+  },
+  {
+    id: "m-boat",
+    kind: "message",
+    communityId: "guest-spots",
+    fanId: "f-dev",
+    title: "Boat kitchen on Sunday",
+    body: "The boat kitchen is free on Sunday morning if you ever want a quiet scene.",
+    hoursAgo: 50,
+    status: "open",
+  },
+  {
+    id: "m-cheer",
+    kind: "message",
+    communityId: "night-market",
+    fanId: "f-nina",
+    title: "Loved the last film",
+    body: "Loved the last film.",
+    hoursAgo: 8,
+    status: "open",
+  },
+  {
+    id: "m-spam",
+    kind: "message",
+    communityId: "guest-spots",
+    fanId: "f-rio",
+    title: "Grow the channel fast",
+    body: "I can get you 10k followers this week. DM me for the package.",
+    hoursAgo: 6,
+    status: "open",
+  },
+  {
+    id: "p-bowl",
+    kind: "pitch",
+    communityId: "test-kitchen",
+    fanId: "f-sam",
+    title: "Weeknight bowls for the next film",
+    body: "Can you cook three weeknight bowls that take 20 minutes? I can send the recipes I use after work.",
+    hoursAgo: 120,
+    status: "accepted",
+    cta: "Send one weeknight bowl that takes 20 minutes. I will cook three of them in the next film.",
+    ctaHoursAgo: 90,
+  },
+];
+
+export type SeedItem = {
+  id: string;
+  kind: Kind;
+  communityId: string;
+  fanId: string;
+  title: string;
+  body: string;
+  createdAt: string;
+  status: "open" | "accepted";
+  cta: string | null;
+  postedAt: string | null;
+};
+
+export function seedItems(now: Date): SeedItem[] {
+  return SPECS.map((spec) => ({
+    id: spec.id,
+    kind: spec.kind,
+    communityId: spec.communityId,
+    fanId: spec.fanId,
+    title: spec.title,
+    body: spec.body,
+    createdAt: hoursAgo(now, spec.hoursAgo),
+    status: spec.status,
+    cta: spec.cta ?? null,
+    postedAt: spec.ctaHoursAgo != null ? hoursAgo(now, spec.ctaHoursAgo) : null,
+  }));
 }
 
-export function buildSeed(now = new Date()): StoreData {
-  const users: User[] = [
-    {
-      id: FIELD.lena,
-      name: "Lena Park",
-      email: "lena@fieldnotes.example",
-      handle: "lena",
-      bio: "I film people walking their cities, then cut the footage into Field Notes.",
-      hue: 158,
-      createdAt: ago(40),
-    },
-    {
-      id: FIELD.jordan,
-      name: "Jordan Hale",
-      email: "jordan@fieldnotes.example",
-      handle: "jordan",
-      bio: "I carry a film camera and a paper map on every walk.",
-      hue: 18,
-      createdAt: ago(30),
-    },
-    {
-      id: FIELD.sam,
-      name: "Sam Okonkwo",
-      email: "sam@fieldnotes.example",
-      handle: "sam",
-      bio: "I record city sound: horns, fans, and rooms with the lights off.",
-      hue: 205,
-      createdAt: ago(28),
-    },
-    {
-      id: FIELD.priya,
-      name: "Priya Shah",
-      email: "priya@fieldnotes.example",
-      handle: "priya",
-      bio: "I sew small kits and print short runs on a risograph.",
-      hue: 280,
-      createdAt: ago(26),
-    },
-    {
-      id: FIELD.mateo,
-      name: "Mateo Ruiz",
-      email: "mateo@fieldnotes.example",
-      handle: "mateo",
-      bio: "I ride the dawn ferry and know half the regulars.",
-      hue: 36,
-      createdAt: ago(24),
-    },
-    {
-      id: FIELD.june,
-      name: "June Adler",
-      email: "june@fieldnotes.example",
-      handle: "june",
-      bio: "I bake the early shift and walk home when the streetlights turn off.",
-      hue: 332,
-      createdAt: ago(22),
-    },
-    {
-      id: FIELD.amina,
-      name: "Amina Diallo",
-      email: "amina@fieldnotes.example",
-      handle: "amina",
-      bio: "I edit fan photos into small zines.",
-      hue: 190,
-      createdAt: ago(20),
-    },
-  ];
-
-  const community: Community = {
-    id: FIELD.communityId,
-    slug: FIELD.slug,
-    name: "Field Notes",
-    interest: "City walks and the next season of Field Notes",
-    description:
-      "The fan room for Field Notes. Bring a walk, a kit, or a pitch for the next season. Spam stays out. The ideas that repeat get grouped. Lena reads a short letter each day.",
-    creatorId: FIELD.lena,
-    createdAt: ago(40),
-  };
-
-  const members: Member[] = users.map((user) => ({
-    communityId: community.id,
-    userId: user.id,
-    joinedAt: user.createdAt,
-  }));
-
-  const idea = (
-    partial: Pick<Idea, "id" | "authorId" | "title" | "body" | "pinned" | "stage" | "createdAt">,
-  ): Idea => ({
-    ...partial,
-    communityId: community.id,
-    qualityScore: 0.82,
-    moderationNote: KEPT,
-    moderationSource: "fallback",
-    clusterId: null,
-  });
-
-  const ideas: Idea[] = [
-    idea({
-      id: FIELD.freight,
-      authorId: FIELD.jordan,
-      title: "Night walk on the freight spur",
-      body: "Do a night walk along the old freight spur behind the mill. One flashlight each, and no phones out until the last bridge. I can sketch a one page map.",
-      pinned: false,
-      stage: "open",
-      createdAt: ago(4, 3),
-    }),
-    idea({
-      id: FIELD.river,
-      authorId: FIELD.sam,
-      title: "Night walk from the river steps",
-      body: "A night walk that starts at the river steps and ends at the radio tower. Keep a quiet pace and note every block that still has a diner open.",
-      pinned: false,
-      stage: "open",
-      createdAt: ago(5, 2),
-    }),
-    idea({
-      id: FIELD.lit,
-      authorId: FIELD.amina,
-      title: "Night walk map of lit blocks",
-      body: "Build a night walk map of blocks that stay lit after midnight. Fans mark porch lights, late windows, and safe crossings. Lena can open a night episode with it.",
-      pinned: false,
-      stage: "open",
-      createdAt: ago(6, 1),
-    }),
-    idea({
-      id: FIELD.notebook,
-      authorId: FIELD.priya,
-      title: "Make kit: pocket notebook",
-      body: "Make a pocket notebook from scrap leather and a folded city map. Each fan sews one cover before the next group outing. I can cut the paper patterns.",
-      pinned: false,
-      stage: "open",
-      createdAt: ago(9, 4),
-    }),
-    idea({
-      id: FIELD.mic,
-      authorId: FIELD.sam,
-      title: "Make kit: tin can mic",
-      body: "Make a tin can mic so fans can record street musicians. Keep the parts under ten dollars, then share the tapes in the members feed. I will test the first build.",
-      pinned: false,
-      stage: "open",
-      createdAt: ago(10, 2),
-    }),
-    idea({
-      id: FIELD.zine,
-      authorId: FIELD.amina,
-      title: "Make kit: risograph zine",
-      body: "Make a risograph zine from last month's fan photos. Ten pages, two inks, stapled at the next meetup. I can run the scans this week.",
-      pinned: false,
-      stage: "open",
-      createdAt: ago(11, 5),
-    }),
-    idea({
-      id: FIELD.bakery,
-      authorId: FIELD.june,
-      title: "Episode pitch: the 4am bakery",
-      body: "Episode pitch for season four. Follow the bakery that opens at 4am and the regulars who never speak until the second coffee. Film one service, with no voiceover.",
-      pinned: false,
-      stage: "open",
-      createdAt: ago(3, 6),
-    }),
-    idea({
-      id: FIELD.ferry,
-      authorId: FIELD.mateo,
-      title: "Episode pitch: the ferry worker",
-      body: "Episode pitch for season four. The ferry worker who knows every regular by their order and their stop. Ride three dawn crossings and let him talk.",
-      pinned: false,
-      stage: "open",
-      createdAt: ago(7, 3),
-    }),
-    idea({
-      id: FIELD.garden,
-      authorId: FIELD.jordan,
-      title: "Episode pitch: the depot garden",
-      body: "Episode pitch for season four. The rooftop garden above the bus depot, kept by the late shift drivers. Visit at shift change and cook one meal from what is ripe.",
-      pinned: false,
-      stage: "open",
-      createdAt: ago(8, 1),
-    }),
-    idea({
-      id: FIELD.saturday,
-      authorId: FIELD.lena,
-      title: "Members walk this Saturday",
-      body: "Hold the next members walk this Saturday at 8pm. Meet under the stone arch by the market clock. Cap it at 18 people so it stays a walk and not a crowd.",
-      pinned: true,
-      stage: "open",
-      createdAt: ago(1, 4),
-    }),
-    idea({
-      id: FIELD.postcard,
-      authorId: FIELD.sam,
-      title: "City sound postcard",
-      body: "Record a 20 minute city sound postcard for the members feed. Capture the footbridge, a hood fan, and one boat horn. No music under it.",
-      pinned: false,
-      stage: "in_progress",
-      createdAt: ago(2, 5),
-    }),
-    idea({
-      id: FIELD.map,
-      authorId: FIELD.lena,
-      title: "Paper map from season 3",
-      body: "The folded paper map from season 3, with the routes we actually finished. It went out last month. Fans still write corrections in the margins.",
-      pinned: false,
-      stage: "shipped",
-      createdAt: ago(20, 2),
-    }),
-  ];
-
-  const vote = (ideaId: string, ...userIds: string[]): Vote[] => userIds.map((userId) => ({ ideaId, userId }));
-  const votes: Vote[] = [
-    ...vote(FIELD.freight, FIELD.lena, FIELD.sam, FIELD.priya, FIELD.mateo, FIELD.june, FIELD.amina),
-    ...vote(FIELD.river, FIELD.jordan, FIELD.priya, FIELD.mateo, FIELD.june),
-    ...vote(FIELD.lit, FIELD.jordan, FIELD.sam, FIELD.priya),
-    ...vote(FIELD.notebook, FIELD.jordan, FIELD.amina, FIELD.lena, FIELD.mateo),
-    ...vote(FIELD.mic, FIELD.priya, FIELD.jordan, FIELD.amina),
-    ...vote(FIELD.zine, FIELD.priya, FIELD.june, FIELD.lena),
-    ...vote(FIELD.bakery, FIELD.lena, FIELD.jordan, FIELD.sam, FIELD.mateo, FIELD.amina),
-    ...vote(FIELD.ferry, FIELD.june, FIELD.jordan, FIELD.lena, FIELD.priya),
-    ...vote(FIELD.garden, FIELD.sam, FIELD.june, FIELD.mateo),
-    ...vote(FIELD.saturday, FIELD.jordan, FIELD.sam, FIELD.priya, FIELD.mateo, FIELD.june, FIELD.amina),
-    ...vote(FIELD.postcard, FIELD.lena, FIELD.jordan, FIELD.amina),
-    ...vote(FIELD.map, FIELD.jordan, FIELD.sam, FIELD.priya, FIELD.mateo, FIELD.june, FIELD.amina),
-  ];
-
-  const comments: Comment[] = [
-    {
-      id: "com_map_print",
-      ideaId: FIELD.freight,
-      authorId: FIELD.priya,
-      body: "I can print the one page map if we keep it to a single side.",
-      createdAt: ago(4, 1),
-    },
-    {
-      id: "com_lights",
-      ideaId: FIELD.freight,
-      authorId: FIELD.sam,
-      body: "I will bring two extra flashlights.",
-      createdAt: ago(3, 8),
-    },
-    {
-      id: "com_tower",
-      ideaId: FIELD.river,
-      authorId: FIELD.mateo,
-      body: "The tower path locks at 11. If we start at 9 we still make it.",
-      createdAt: ago(5),
-    },
-    {
-      id: "com_bakery_ask",
-      ideaId: FIELD.bakery,
-      authorId: FIELD.lena,
-      body: "This is the pitch I keep hearing in my head. June, would you ask them?",
-      createdAt: ago(3, 2),
-    },
-    {
-      id: "com_bakery_yes",
-      ideaId: FIELD.bakery,
-      authorId: FIELD.june,
-      body: "I work the Friday pre shift. I can ask the owner before service.",
-      createdAt: ago(3, 1),
-    },
-    {
-      id: "com_cap",
-      ideaId: FIELD.saturday,
-      authorId: FIELD.jordan,
-      body: "I can hold the list at 18 and turn people toward the next date.",
-      createdAt: ago(1, 2),
-    },
-    {
-      id: "com_horn",
-      ideaId: FIELD.postcard,
-      authorId: FIELD.lena,
-      body: "I started the field recording. The boat horn is already in the first minute.",
-      createdAt: ago(1, 6),
-    },
-    {
-      id: "com_mic_cost",
-      ideaId: FIELD.mic,
-      authorId: FIELD.jordan,
-      body: "If the parts stay under ten dollars I will build one this week.",
-      createdAt: ago(9),
-    },
-  ];
-
-  const collaborations: Collaboration[] = [
-    {
-      id: "col_print",
-      ideaId: FIELD.freight,
-      userId: FIELD.priya,
-      note: "I will print the one page map.",
-      createdAt: ago(4),
-    },
-    {
-      id: "col_list",
-      ideaId: FIELD.saturday,
-      userId: FIELD.jordan,
-      note: "I will keep the headcount at 18.",
-      createdAt: ago(1, 1),
-    },
-    {
-      id: "col_intro",
-      ideaId: FIELD.bakery,
-      userId: FIELD.june,
-      note: "I can introduce Lena to the owner before Friday service.",
-      createdAt: ago(3),
-    },
-    {
-      id: "col_mic",
-      ideaId: FIELD.mic,
-      userId: FIELD.jordan,
-      note: "I will test one build and report how it sounds.",
-      createdAt: ago(8),
-    },
-    {
-      id: "col_cut",
-      ideaId: FIELD.postcard,
-      userId: FIELD.amina,
-      note: "I can cut the quiet parts so the feed version stays short.",
-      createdAt: ago(2),
-    },
-  ];
-
-  const data: StoreData = {
-    seedVersion: SEED_VERSION,
-    users,
-    communities: [community],
-    members,
-    ideas,
-    votes,
-    comments,
-    collaborations,
-    clusters: [],
-    summaries: [],
-    magicTokens: [],
-  };
-
-  assignClusters(data, community.id, null);
-
-  data.summaries.push({
-    id: "sum_seed",
-    communityId: community.id,
-    day: todayKey(now),
-    headline: "Saturday's walk is full, and the night routes are piling up",
-    body: [
-      "Members are ready for the Saturday walk under the stone arch. Jordan offered to hold the list at 18. The night walks on the freight spur, from the river steps, and across the lit blocks are really one idea: a quiet route after dark.",
-      "The strongest season four pitch is the 4am bakery. June can make the introduction. The pocket notebook, the tin can mic, and the risograph zine are kits people can make together. The paper map from season 3 has already shipped.",
-    ].join("\n\n"),
-    source: "fallback",
-    topIdeaIds: [FIELD.saturday, FIELD.freight, FIELD.bakery],
-    createdAt: ago(0, 2),
-  });
-
-  return data;
+export function communityById(id: string): Community | null {
+  return COMMUNITIES.find((community) => community.id === id) ?? null;
 }
