@@ -3,23 +3,26 @@
 @theme {
   --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-fraunces), Georgia, serif;
-  --color-paper: #f3eadc;
-  --color-card: #fffaf2;
-  --color-ink: #1c1916;
-  --color-muted: #4a453e;
-  --color-line: #ddcfb8;
+  --color-paper: #f4efe6;
+  --color-card: #fffdf8;
+  --color-ink: #1c1915;
+  --color-muted: #5c564c;
+  --color-line: #e4d9c8;
   --color-pine: #145c45;
-  --color-clay: #b64018;
+  --color-clay: #8d3414;
 }
 
 body {
-  background: var(--color-paper);
+  background:
+    radial-gradient(900px 420px at 50% -80px, #efe2cf, transparent 70%),
+    var(--color-paper);
   color: var(--color-ink);
   font-family: var(--font-sans);
 }
 
 h1,
 h2,
+h3,
 .font-display {
   font-family: var(--font-display), Georgia, serif;
 }
@@ -35,6 +38,7 @@ h2,
 
 input,
 textarea,
-button {
+button,
+summary {
   font: inherit;
 }

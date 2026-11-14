@@ -1,76 +1,119 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { clusterIdeasFallback, hardScreenIdea, moderateIdea } from "./ai";
-import { buildSeed, FIELD } from "./seed";
+import { classifyNotes, GROUP_NOTES, parseModelPayload } from "./ai";
 
-const market = {
-  id: "idea_market",
-  title: "Night walk through the covered market",
-  body: "Night walk through the covered market after the stalls close. The tile is still warm. We write down three smells and leave by the east gate.",
+const KEYS = ["GEMINI_API_KEY", "OPENAI_API_KEY", "AI_API_KEY", "AI_MODEL", "AI_BASE_URL"] as const;
+
+async function withEnv(values: Partial<Record<(typeof KEYS)[number], string>>, run: () => Promise<void>) {
+  const previous = new Map(KEYS.map((key) => [key, process.env[key]]));
+  for (const key of KEYS) {
+    const next = values[key];
+    if (next === undefined) delete process.env[key];
+    else process.env[key] = next;
+  }
+  try {
+    await run();
+  } finally {
+    for (const [key, value] of previous) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
+const dosa = {
+  id: "p-dosa",
+  title: "Film the 11pm dosa cart on Princess Street",
+  body: "Can you film the dosa cart on Princess Street this Thursday at 11pm? The cook will talk if you stay for one order.",
 };
 
-describe("house filter", () => {
-  it("blocks spam and thin posts", async () => {
-    const spam = await moderateIdea({
-      interest: "city walks",
-      title: "BUY FOLLOWERS NOW",
-      body: "BUY FOLLOWERS NOW click here http://bit.ly/free money for fans",
-      existing: [],
+describe("model fallback", () => {
+  it("parses a fenced payload and ignores a bad topic", () => {
+    const parsed = parseModelPayload(
+      '```json\n{"items":[{"id":"p-dosa","topic":"Night market","summary":"Kabir wants a Thursday film at the dosa cart."},{"id":"p-map","topic":"Nope","summary":"Too short"}]}\n```',
+      ["p-dosa", "p-map"],
+    );
+    assert.deepEqual(parsed?.["p-dosa"], {
+      topic: "Night market",
+      summary: "Kabir wants a Thursday film at the dosa cart.",
     });
-    assert.equal(spam.ok, false);
-    assert.match(spam.reason, /spam/i);
-
-    const thin = await moderateIdea({
-      interest: "city walks",
-      title: "Cool idea",
-      body: "It would be really cool if we did something fun for the fans sometime.",
-      existing: [],
-    });
-    assert.equal(thin.ok, false);
+    assert.equal(parsed?.["p-map"], undefined);
+    assert.equal(parseModelPayload("hello", ["p-dosa"]), null);
+    walkGroupNotes();
   });
 
-  it("keeps a concrete idea and rejects a copy", async () => {
-    const seed = buildSeed();
-    const existing = seed.ideas.map((idea) => ({ title: idea.title, body: idea.body }));
-    const kept = await moderateIdea({
-      interest: "city walks",
-      title: market.title,
-      body: market.body,
-      existing,
+  it("does not call the network when no key is set", async () => {
+    await withEnv({}, async () => {
+      let called = false;
+      const original = globalThis.fetch;
+      globalThis.fetch = async () => {
+        called = true;
+        throw new Error("network");
+      };
+      try {
+        const result = await classifyNotes([dosa]);
+        assert.equal(result.mode, "rules");
+        assert.equal(result.items[0]?.topic, "Night market");
+        assert.equal(result.items[0]?.source, "rules");
+        assert.equal(called, false);
+      } finally {
+        globalThis.fetch = original;
+      }
     });
-    assert.equal(kept.ok, true);
-    assert.equal(kept.source, "fallback");
+  });
 
-    const copy = hardScreenIdea("Night walk on the freight spur", seed.ideas[0].body, existing);
-    assert.equal(copy.ok, false);
+  it("uses Gemini when that key is set, and falls back if the model answer is junk", async () => {
+    await withEnv({ GEMINI_API_KEY: "test-gemini", OPENAI_API_KEY: "test-openai" }, async () => {
+      const original = globalThis.fetch;
+      let url = "";
+      globalThis.fetch = async (input) => {
+        url = String(input);
+        return new Response(
+          JSON.stringify({
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      text: JSON.stringify({
+                        items: [{ id: "p-dosa", topic: "Night market", summary: "Kabir wants the Thursday dosa cart film." }],
+                      }),
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      };
+      try {
+        const result = await classifyNotes([dosa]);
+        assert.match(url, /generativelanguage\.googleapis\.com/);
+        assert.equal(url.includes("test-openai"), false);
+        assert.equal(result.mode, "model");
+        assert.equal(result.items[0]?.source, "model");
+        assert.match(result.items[0]?.summary ?? "", /dosa cart/);
+      } finally {
+        globalThis.fetch = original;
+      }
+    });
+
+    await withEnv({ OPENAI_API_KEY: "test-openai" }, async () => {
+      const original = globalThis.fetch;
+      globalThis.fetch = async () => new Response("nope", { status: 200 });
+      try {
+        const result = await classifyNotes([dosa]);
+        assert.equal(result.mode, "model_failed");
+        assert.equal(result.items[0]?.source, "rules");
+        assert.equal(result.items[0]?.topic, "Night market");
+      } finally {
+        globalThis.fetch = original;
+      }
+    });
   });
 });
 
-describe("clustering", () => {
-  it("groups the seeded room by shared phrases", () => {
-    const seed = buildSeed();
-    const clusters = clusterIdeasFallback(seed.ideas.map((idea) => ({ id: idea.id, title: idea.title, body: idea.body })));
-    const of = (id: string) => clusters.find((cluster) => cluster.ideaIds.includes(id));
-    assert.equal(of(FIELD.freight), of(FIELD.river));
-    assert.equal(of(FIELD.freight), of(FIELD.lit));
-    assert.notEqual(of(FIELD.freight), of(FIELD.bakery));
-    assert.notEqual(of(FIELD.freight), of(FIELD.saturday));
-    assert.equal(of(FIELD.notebook), of(FIELD.mic));
-    assert.equal(of(FIELD.notebook), of(FIELD.zine));
-    assert.equal(of(FIELD.bakery), of(FIELD.ferry));
-    assert.equal(of(FIELD.bakery), of(FIELD.garden));
-    assert.match(of(FIELD.freight)?.label || "", /night walk/i);
-    assert.match(of(FIELD.notebook)?.label || "", /make kit/i);
-    assert.match(of(FIELD.bakery)?.label || "", /episode pitch/i);
-  });
-
-  it("puts a new night walk with the night walks", () => {
-    const seed = buildSeed();
-    const clusters = clusterIdeasFallback([
-      ...seed.ideas.map((idea) => ({ id: idea.id, title: idea.title, body: idea.body })),
-      market,
-    ]);
-    const of = (id: string) => clusters.find((cluster) => cluster.ideaIds.includes(id));
-    assert.equal(of(market.id), of(FIELD.freight));
-  });
-});
+function walkGroupNotes() {
+  for (const note of Object.values(GROUP_NOTES)) assert.equal(/[—–]/.test(note), false);
+}

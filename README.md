@@ -1,33 +1,61 @@
 # Fanbase OS
 
-A working room for a creator and the people who already care.
+A link in bio hub that turns a creator's inbox into communities, ranked ideas, and a call the fans can act on.
 
-Built for Persist Startupathon: Build the Operating System for Fanbases.
+Built for Persist Ventures Startupathon, round 1: Build the Operating System for Fanbases.
 
 ## Problem
 
-Fan comments are a pile. A good idea sits next to spam, repeats, and one line cheers. The creator cannot tell what the room actually wants, and members cannot build on each other's posts.
+Creators with large audiences drown in DMs, comments, and half formed ideas. The useful people in that audience never get a way to work together, and "pay to message me" throws away what is sitting in the inbox.
 
-## Core flow
+## Core loop
 
-1. A creator opens a community around one interest.
-2. Members post ideas.
-3. Members upvote, comment, and join an idea with a note about what they will do.
-4. Each new idea is filtered. Spam and thin posts are turned away. Similar ideas are grouped.
-5. The creator reads a daily letter about the top ideas, then pins one, marks it in progress, or marks it shipped.
+One creator, one loop:
 
-The seeded room is Field Notes, Lena Park's community for city walks and the next season of her series. You can open it with no account.
+1. A fan opens the creator's public hub, the link that would sit in a bio.
+2. The fan joins an interest community and pitches an idea.
+3. The creator's desk groups pitches and messages by topic, then puts a few on top. Each one has a score and a short reason. The ranking rules stay on screen.
+4. The creator accepts a pitch and posts a call to action. The call shows on the public hub.
 
-## Setup
+The seeded creator is Rhea Kapoor (`@sundaytable`). Her fans already left pitches and messages, so the desk is alive before you add anything. No account, no payment, no app install.
+
+## Architecture
+
+Next.js App Router and TypeScript. The pages are server rendered. Forms post to server actions.
+
+There is no database. Vercel does not give every function a shared disk, and provisioning Postgres or Redis would be extra setup this demo does not need. The seed lives in `src/server/seed.ts`, so every visitor, on every instance, sees Rhea, her communities, and the inbox. Joins, new pitches, and calls are stored in an httpOnly cookie on that browser. The next request can hit any instance. The server reads the cookie and lays it over the seed. Reset demo clears the cookie.
+
+The tradeoff is honest: notes you add live in that browser only. Two people on two phones will not see each other's new pitches. The shared story is the seed, which is the same everywhere. That is enough for a zero setup deploy, and it is what a two minute demo needs. The cookie is capped around 3.5 KB. If a session outgrows it, the desk asks you to reset.
+
+Ranking does not depend on a model. `src/server/rank.ts` scores every open note:
+
+| Rule | Points |
+| --- | --- |
+| Concrete detail (a place, time, number, or named thing) | +2 |
+| Clear ask (what to do next) | +2 |
+| At least two other open notes share the topic | +2 |
+| Arrived in the last 7 days | +1 |
+
+Spam is dropped. So is a note with no detail and no ask. A note needs 5 points to be eligible. The desk shows at most 3, and at most 2 from the same topic, so one loud group cannot fill the list. The same rules are rendered from that module, so the panel cannot drift from the code.
+
+## How AI is used
+
+The model does two jobs only: name a topic, and write a one sentence summary. It does not pick the winner and it does not change the score.
+
+`src/server/ai.ts` calls Gemini when `GEMINI_API_KEY` is set. Otherwise it calls an OpenAI compatible chat API when `OPENAI_API_KEY` or `AI_API_KEY` is set. If both are set, Gemini wins. The button on the desk is Group again with the model.
+
+If no key is set, or the call fails, or the JSON is unusable, the same screen keeps working. Topics come from house rules (keyword phrases for night markets, the test kitchen, and guest spots). The badge on each note says Topic from rules or Topic from the model. Scores always say which rules fired.
+
+New pitches are classified with house rules immediately, so sending one never waits on the network. Group again is the model step.
+
+## Run it
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open http://localhost:3000 and choose Enter Field Notes.
-
-Useful scripts:
+Open http://localhost:3000. You are on Rhea's hub. Creator desk is in the header.
 
 ```bash
 npm test
@@ -35,51 +63,35 @@ npm run lint
 npm run build
 ```
 
-With no environment variables, the app stores data in `data/store.json` and uses the built in house rules for filtering, clustering, and the daily letter. On Vercel, that file fallback uses `/tmp`, which does not last across instances. Set `DATABASE_URL` for a room that keeps posts.
+Copy `.env.example` to `.env.local` only if you want the model. The demo is complete with every variable empty.
 
 ## Env vars
 
-Copy `.env.example` to `.env.local`.
+| Name | Required | Purpose |
+| --- | --- | --- |
+| `GEMINI_API_KEY` | No | Gemini. Names topics and writes summaries. Wins if other keys are also set. |
+| `OPENAI_API_KEY` | No | OpenAI, or any compatible chat API. Used when `GEMINI_API_KEY` is empty. |
+| `AI_API_KEY` | No | Alias for `OPENAI_API_KEY`. |
+| `AI_BASE_URL` | No | OpenAI compatible base. Default `https://api.openai.com/v1`. |
+| `AI_MODEL` | No | Overrides the model for the active provider. Gemini default `gemini-2.5-flash`. OpenAI default `gpt-4o-mini`. |
 
-| Name | Purpose |
-| --- | --- |
-| `DATABASE_URL` | Postgres connection string from Neon or Supabase. Optional. |
-| `DATABASE_SSL` | Set to `disable` for a local Postgres without SSL. |
-| `AUTH_SECRET` | Signs session cookies. Set a long random value in production. |
-| `APP_URL` | Public site URL, no trailing slash. Used for magic links and the GitHub callback. |
-| `AI_API_KEY` | Key for an OpenAI compatible chat API. Preferred name. |
-| `OPENAI_API_KEY` | Used when `AI_API_KEY` is empty. |
-| `AI_BASE_URL` | API base. Default `https://api.openai.com/v1`. For Vercel AI Gateway use `https://ai-gateway.vercel.sh/v1`. |
-| `AI_MODEL` | Default `gpt-4o-mini`. |
-| `GITHUB_CLIENT_ID` | GitHub OAuth. Callback is `{APP_URL}/api/auth/github/callback`. |
-| `GITHUB_CLIENT_SECRET` | GitHub OAuth secret. |
-| `RESEND_API_KEY` | Sends magic links. When empty, the sign in page shows the link. |
-| `EMAIL_FROM` | From address for Resend. |
+No database URL. No auth secret.
 
-Demo sign in does not need any of these. Use Demo member (Jordan Hale) or Demo creator (Lena Park). Magic link and GitHub are real sign in paths for everyone else. A new email joins Field Notes, or the room in the link you came from.
+## Deploy on Vercel
 
-## Where AI is used and why
+The repo root is the app.
 
-All three jobs live in `src/server/ai.ts`.
+- Framework preset: Next.js
+- Root directory: `.`
+- Build command: `next build` (the default)
+- Install command: `npm install` (the default)
+- Output: leave the default Next.js output. Do not set a custom directory.
+- Node.js: 20 or newer
 
-1. **Filter.** When a member posts an idea, the module checks for spam, copies, and posts with nothing to do. The creator should not have to read junk. Comments and collaboration notes use the same spam screen.
-2. **Cluster.** After a kept idea, the module groups posts that propose a similar thing, such as night walks or episode pitches. Repeats become one theme instead of a long list.
-3. **Daily letter.** When the creator asks, the module writes a short brief that names the leading ideas and the newest post, plus one next step.
+Do not add a Postgres, Redis, Blob, or KV integration. Do not set any environment variable for the basic demo. Add `GEMINI_API_KEY` or `OPENAI_API_KEY` only if you want Group again to call a model.
 
-If `AI_API_KEY` and `OPENAI_API_KEY` are empty, or the model call fails, the same module uses house rules: a spam list, a concrete detail check, shared phrases for clusters, and a template letter. The demo runs with no key. The idea page labels the path as House filter or Model filter. The letter says House letter or Model.
-
-## Deploy
-
-From a logged in Vercel account:
-
-```bash
-npx vercel --prod
-```
-
-Set `DATABASE_URL` on the project so posts last. Without it, the app uses `/tmp` on Vercel. The seeded room still loads, and new posts can disappear when that instance resets.
+Cookies must be allowed. They are on by default. The cookie is marked Secure when `VERCEL` is set, which Vercel does on every deploy. Local http still works.
 
 ## Demo
 
-See [DEMO_SCRIPT.md](DEMO_SCRIPT.md) for a two minute walkthrough.
-
-Lena can restore the original Field Notes data from the daily letter page. That also removes rooms created after the seed.
+See [DEMO_SCRIPT.md](DEMO_SCRIPT.md) for the two minute path: public hub, join, pitch, grouped desk, accept, call back on the hub.
